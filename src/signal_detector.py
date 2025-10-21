@@ -64,8 +64,7 @@ class SignalDetector:
 
         if is_near:
             diff_pct = ((current_close - current_sma) / current_sma) * 100
-            logger.info(f"SMA960 근처 감지! 종가: {current_close:.4f}, SMA960: {current_sma:.4f}, "
-                       f"차이: {diff_pct:+.2f}%")
+            # 심볼 정보는 analyze_signal에서 전달받을 것이므로 여기서는 로그 제거
 
         return is_near
 

@@ -68,6 +68,17 @@ class BinanceAPI:
             필터링된 심볼 리스트
         """
         try:
+            # 거래소 정보 가져오기 (contractType 확인용)
+            exchange_info = self.client.futures_exchange_info()
+            perpetual_symbols = {
+                s['symbol']
+                for s in exchange_info['symbols']
+                if s['symbol'].endswith('USDT')
+                   and s['status'] == 'TRADING'
+                   and s['contractType'] == 'PERPETUAL'
+            }
+            logger.debug(f"USDT 무기한 선물 계약: {len(perpetual_symbols)}개")
+
             # 24시간 티커 데이터 가져오기
             tickers = self.client.futures_ticker()
 
@@ -76,8 +87,8 @@ class BinanceAPI:
             for ticker in tickers:
                 symbol = ticker['symbol']
 
-                # 1. USDT 선물만 필터링
-                if not symbol.endswith('USDT'):
+                # 1. USDT PERPETUAL 선물만 필터링
+                if symbol not in perpetual_symbols:
                     continue
 
                 try:
@@ -104,7 +115,7 @@ class BinanceAPI:
             filtered_symbols = sorted(filtered_symbols, key=lambda s: tickers_dict.get(s, 0), reverse=True)
 
             logger.info(f"사전필터 통과: {len(filtered_symbols)}개 심볼 "
-                       f"(거래량≥${min_volume_usd/1_000_000:.0f}M, 상승률≥{min_price_change_pct:+.0f}%)")
+                       f"(USD-M PERPETUAL, 거래량≥${min_volume_usd/1_000_000:.0f}M, 상승률≥{min_price_change_pct:+.0f}%)")
 
             if filtered_symbols:
                 logger.info(f"필터링된 심볼 예시: {filtered_symbols[:10]}")

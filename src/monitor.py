@@ -126,6 +126,16 @@ class SMAMonitor:
             # 역배열 확인
             reverse_aligned = self.sma_calculator.check_reverse_alignment(sma_values)
 
+            # 디버그: SMA960 근처 체크
+            current_price = df_with_sma.iloc[-1]['close']
+            sma960_value = sma_values.get(960)
+            if sma960_value:
+                diff_pct = ((current_price - sma960_value) / sma960_value) * 100
+                lower_bound = sma960_value * 0.95
+                upper_bound = sma960_value * 1.05
+                if lower_bound <= current_price <= upper_bound:
+                    logger.info(f"{symbol}: SMA960 근처! 종가={current_price:.4f}, SMA960={sma960_value:.4f}, 차이={diff_pct:+.2f}%, 역배열={'✅' if reverse_aligned else '❌'}")
+
             # 시그널 분석 (역배열이 아니어도 SMA960 근처면 시그널 발생 가능)
             signal_info = self.signal_detector.analyze_signal(
                 symbol=symbol,

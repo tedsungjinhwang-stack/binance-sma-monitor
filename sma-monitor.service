@@ -1,0 +1,21 @@
+[Unit]
+Description=Binance SMA Monitor
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/binance_sma_monitor
+ExecStart=/usr/bin/python3 /home/ubuntu/binance_sma_monitor/main.py
+Restart=always
+RestartSec=10
+
+# 로그 설정
+StandardOutput=journal
+StandardError=journal
+
+# 환경 변수 (필요 시)
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=multi-user.target
