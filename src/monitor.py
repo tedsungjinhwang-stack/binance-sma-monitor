@@ -131,7 +131,7 @@ class SMAMonitor:
                 return False
 
             # 역배열 확인 (target SMA에 따라 다른 기간 사용)
-            reverse_aligned = self.sma_calculator.check_reverse_alignment_flexible(sma_values, actual_target_sma)
+            reverse_aligned, reverse_type = self.sma_calculator.check_reverse_alignment_flexible(sma_values, actual_target_sma)
 
             # 디버그: target SMA 근처 체크
             current_price = df_with_sma.iloc[-1]['close']
@@ -141,7 +141,8 @@ class SMAMonitor:
                 lower_bound = target_sma_value * 0.95
                 upper_bound = target_sma_value * 1.05
                 if lower_bound <= current_price <= upper_bound:
-                    logger.info(f"{symbol}: SMA{actual_target_sma} 근처! 종가={current_price:.4f}, SMA{actual_target_sma}={target_sma_value:.4f}, 차이={diff_pct:+.2f}%, 역배열={'✅' if reverse_aligned else '❌'}")
+                    reverse_label = f"✅({reverse_type})" if reverse_aligned else "❌"
+                    logger.info(f"{symbol}: SMA{actual_target_sma} 근처! 종가={current_price:.4f}, SMA{actual_target_sma}={target_sma_value:.4f}, 차이={diff_pct:+.2f}%, 역배열={reverse_label}")
 
             # 시그널 분석
             signal_info = self.signal_detector.analyze_signal(
@@ -149,6 +150,7 @@ class SMAMonitor:
                 df=df_with_sma,
                 sma_values=sma_values,
                 reverse_aligned=reverse_aligned,
+                reverse_type=reverse_type,
                 actual_target_sma=actual_target_sma,
                 breakout_type=self.breakout_type
             )

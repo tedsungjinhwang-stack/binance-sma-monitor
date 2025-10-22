@@ -163,7 +163,7 @@ class SMACalculator:
 
         return 0
 
-    def check_reverse_alignment_flexible(self, sma_values: Dict[int, float], target_sma: int) -> bool:
+    def check_reverse_alignment_flexible(self, sma_values: Dict[int, float], target_sma: int) -> tuple:
         """
         유연한 역배열 확인 (target_sma에 따라 다른 기간 사용)
 
@@ -172,31 +172,56 @@ class SMACalculator:
             target_sma: 기준 SMA (960 또는 480)
 
         Returns:
-            역배열 여부
+            (역배열 여부, 역배열 타입)
+            - (True, "FULL"): 완전 역배열 (120 < 240 < 480 < 960)
+            - (True, "PARTIAL"): 부분 역배열 (120 > 240, 240 < 480 < 960) - 960선 기준만
+            - (False, None): 역배열 아님
         """
         if target_sma == 960:
-            # 960 기준: SMA120 < SMA240 < SMA480 < SMA960
+            # 960 기준
             required_periods = [120, 240, 480, 960]
         elif target_sma == 480:
-            # 480 기준: SMA120 < SMA240 < SMA480
+            # 480 기준 (완전 역배열만 체크)
             required_periods = [120, 240, 480]
         else:
-            return False
+            return (False, None)
 
         # 필요한 SMA가 모두 있는지 확인
         for period in required_periods:
             if period not in sma_values or pd.isna(sma_values[period]):
-                return False
+                return (False, None)
 
-        # 역배열 확인
+        # 완전 역배열 확인: 모든 기간이 역순
+        is_full_reverse = True
         for i in range(len(required_periods) - 1):
             current_period = required_periods[i]
             next_period = required_periods[i + 1]
 
             if sma_values[current_period] >= sma_values[next_period]:
-                return False
+                is_full_reverse = False
+                break
 
-        return True
+        if is_full_reverse:
+            return (True, "FULL")
+
+        # 부분 역배열 확인: 960선 기준일 때만 체크
+        # 조건: SMA120 > SMA240 AND SMA240 < SMA480 < SMA960
+        if target_sma == 960 and sma_values[120] > sma_values[240]:
+            # 240부터 나머지가 역배열인지 확인
+            rest_periods = required_periods[1:]  # [240, 480, 960]
+            is_rest_reverse = True
+            for i in range(len(rest_periods) - 1):
+                current_period = rest_periods[i]
+                next_period = rest_periods[i + 1]
+
+                if sma_values[current_period] >= sma_values[next_period]:
+                    is_rest_reverse = False
+                    break
+
+            if is_rest_reverse:
+                return (True, "PARTIAL")
+
+        return (False, None)
 
     def format_sma_values(self, sma_values: Dict[int, float]) -> str:
         """

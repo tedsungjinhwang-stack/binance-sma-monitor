@@ -190,7 +190,8 @@ class SignalDetector:
         logger.debug(f"{symbol}: 알림 기록됨")
 
     def analyze_signal(self, symbol: str, df: pd.DataFrame, sma_values: Dict[int, float],
-                      reverse_aligned: bool, actual_target_sma: int, breakout_type: str = "CLOSE") -> Optional[Dict]:
+                      reverse_aligned: bool, reverse_type: str, actual_target_sma: int,
+                      breakout_type: str = "CLOSE") -> Optional[Dict]:
         """
         종합 시그널 분석
 
@@ -199,6 +200,7 @@ class SignalDetector:
             df: SMA가 계산된 데이터프레임
             sma_values: 현재 SMA 값들
             reverse_aligned: 역배열 여부
+            reverse_type: 역배열 타입 ("FULL", "PARTIAL", None)
             actual_target_sma: 실제 사용된 target SMA (960 또는 480)
             breakout_type: 돌파 타입 (CLOSE, BODY, NEAR)
 
@@ -243,13 +245,14 @@ class SignalDetector:
             'target_sma_period': actual_target_sma,
             'signal_type': signal_type,
             'reverse_aligned': reverse_aligned,
+            'reverse_type': reverse_type,
             'near_target': near_target,
         }
 
         # 알림 기록
         self.record_alert(symbol)
 
-        logger.info(f"시그널 발생: {symbol} @ {current_price:.4f} (타입: {signal_type})")
+        logger.info(f"시그널 발생: {symbol} @ {current_price:.4f} (타입: {signal_type}, 역배열: {reverse_type})")
 
         return signal_info
 
@@ -267,10 +270,15 @@ class SignalDetector:
         price = signal_info['price']
         target_sma = signal_info['target_sma']
         target_sma_period = signal_info.get('target_sma_period', 960)
+        reverse_type = signal_info.get('reverse_type', 'FULL')
         timestamp = signal_info['timestamp']
 
         # 시그널 메시지
-        signal_msg = f"역배열 & SMA{target_sma_period} 근처 (±5%)"
+        if reverse_type == "PARTIAL":
+            signal_msg = f"120선 정배열 & SMA{target_sma_period} 근처 (±5%)"
+        else:  # FULL
+            signal_msg = f"역배열 & SMA{target_sma_period} 근처 (±5%)"
+
         if target_sma_period == 960:
             emoji = "🚀🎯"
         else:  # 480
