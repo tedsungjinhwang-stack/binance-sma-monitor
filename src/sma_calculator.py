@@ -63,7 +63,7 @@ class SMACalculator:
 
     def check_reverse_alignment(self, sma_values: Dict[int, float]) -> bool:
         """
-        역배열 확인 (짧은 기간 SMA가 긴 기간 SMA보다 위에 있는지)
+        역배열 확인 (긴 기간 SMA가 짧은 기간 SMA보다 위에 있는지)
 
         Args:
             sma_values: {기간: SMA값} 딕셔너리
@@ -79,13 +79,13 @@ class SMACalculator:
             if period not in sma_values or pd.isna(sma_values[period]):
                 return False
 
-        # 역배열 확인: SMA120 > SMA240 > SMA480 > SMA960
+        # 역배열 확인: SMA960 > SMA480 > SMA240 > SMA120
         sorted_periods = sorted(self.periods)
         for i in range(len(sorted_periods) - 1):
             current_period = sorted_periods[i]
             next_period = sorted_periods[i + 1]
 
-            if sma_values[current_period] <= sma_values[next_period]:
+            if sma_values[current_period] >= sma_values[next_period]:
                 return False
 
         return True
@@ -136,8 +136,8 @@ class SMACalculator:
             if pd.isna(sma_values.get(current_period)) or pd.isna(sma_values.get(next_period)):
                 continue
 
-            # 짧은 기간이 긴 기간보다 위에 있으면 점수 획득
-            if sma_values[current_period] > sma_values[next_period]:
+            # 짧은 기간이 긴 기간보다 아래에 있으면 점수 획득 (역배열)
+            if sma_values[current_period] < sma_values[next_period]:
                 score += 1
 
         return (score / max_score * 100) if max_score > 0 else 0.0

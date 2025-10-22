@@ -257,11 +257,6 @@ class SignalDetector:
         price = signal_info['price']
         target_sma = signal_info['target_sma']
         timestamp = signal_info['timestamp']
-        signal_type = signal_info.get('signal_type', 'UNKNOWN')
-        reverse_aligned = signal_info.get('reverse_aligned', False)
-        near_sma960 = signal_info.get('near_sma960', False)
-
-        sma_str = " > ".join([f"{v:.4f}" for v in sorted(signal_info['sma_values'].values(), reverse=True)])
 
         # 시그널 메시지 (항상 역배열 AND SMA960 근처)
         signal_msg = "역배열 & SMA960 근처 (±5%)"
@@ -277,12 +272,5 @@ class SignalDetector:
 현재가: {price:.4f}
 SMA960: {target_sma:.4f} (차이: {diff_pct:+.2f}%)
 시간: {timestamp}
-
-SMA 정렬:
-{sma_str}
-
-상태:
-- 역배열: {'✅' if reverse_aligned else '❌'}
-- SMA960 근처: {'✅' if near_sma960 else '❌'}
 """
         return summary.strip()

@@ -8,7 +8,7 @@ BINANCE:
 
 # 모니터링 설정
 MONITOR:
-  INTERVAL: 60  # 체크 주기 (초) - 15분봉이므로 60초마다 체크
+  INTERVAL: 900  # 체크 주기 (초) - 15분봉이므로 15분(900초)마다 체크
   MARKET_TYPE: "USDT_PERP"  # USDT 선물 (Perpetual)
   TIMEFRAME: "15m"  # 15분봉
 
@@ -36,8 +36,8 @@ SMA:
 
 # 시그널 조건
 SIGNAL:
-  # 역배열 조건 (짧은 기간 SMA가 긴 기간 SMA보다 위에 있어야 함)
-  REVERSE_ALIGNMENT: true  # SMA120 > SMA240 > SMA480 > SMA960
+  # 역배열 조건 (긴 기간 SMA가 짧은 기간 SMA보다 위에 있어야 함)
+  REVERSE_ALIGNMENT: true  # SMA960 > SMA480 > SMA240 > SMA120
 
   # 돌파 조건
   BREAKOUT:
