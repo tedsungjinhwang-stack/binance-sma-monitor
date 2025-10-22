@@ -174,12 +174,6 @@ class Notifier:
             # 차이 계산
             diff_pct = ((price - target_sma) / target_sma) * 100 if target_sma else 0
 
-            # 역배열 상태 메시지
-            if reverse_type == "PARTIAL":
-                alignment_status = "✅ (120선만 정배열)"
-            else:
-                alignment_status = "✅ (완전 역배열)"
-
             telegram_msg = f"""
 <b>{emoji} {msg_title} {emoji}</b>
 
@@ -187,13 +181,6 @@ class Notifier:
 <b>현재가:</b> {price:.4f}
 <b>SMA{target_sma_period}:</b> {target_sma:.4f} (차이: {diff_pct:+.2f}%)
 <b>시간:</b> {signal_info['timestamp']}
-
-<b>SMA 정렬:</b>
-{self._format_sma_values_html(signal_info['sma_values'], target_sma_period)}
-
-<b>상태:</b>
-- 역배열: {alignment_status}
-- SMA{target_sma_period} 근처: {'✅' if near_target else '❌'}
 """
             self.send_telegram(telegram_msg.strip())
 
