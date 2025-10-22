@@ -155,12 +155,17 @@ class Notifier:
         if self.telegram_enabled:
             signal_type = signal_info.get('signal_type', 'UNKNOWN')
             reverse_aligned = signal_info.get('reverse_aligned', False)
-            near_sma960 = signal_info.get('near_sma960', False)
+            near_target = signal_info.get('near_target', False)
             target_sma = signal_info['target_sma']
+            target_sma_period = signal_info.get('target_sma_period', 960)
 
-            # 시그널 메시지 (항상 역배열 AND SMA960 근처)
-            emoji = "🚀🎯"
-            msg_title = "역배열 & SMA960 근처 (±5%)"
+            # 시그널 메시지
+            if target_sma_period == 960:
+                emoji = "🚀🎯"
+                msg_title = f"역배열 & SMA{target_sma_period} 근처 (±5%)"
+            else:  # 480
+                emoji = "⚡🎯"
+                msg_title = f"역배열 & SMA{target_sma_period} 근처 (±5%)"
 
             # 차이 계산
             diff_pct = ((price - target_sma) / target_sma) * 100 if target_sma else 0
@@ -170,15 +175,15 @@ class Notifier:
 
 <b>심볼:</b> {symbol}
 <b>현재가:</b> {price:.4f}
-<b>SMA960:</b> {target_sma:.4f} (차이: {diff_pct:+.2f}%)
+<b>SMA{target_sma_period}:</b> {target_sma:.4f} (차이: {diff_pct:+.2f}%)
 <b>시간:</b> {signal_info['timestamp']}
 
 <b>SMA 정렬:</b>
-{self._format_sma_values_html(signal_info['sma_values'])}
+{self._format_sma_values_html(signal_info['sma_values'], target_sma_period)}
 
 <b>상태:</b>
 - 역배열: {'✅' if reverse_aligned else '❌'}
-- SMA960 근처: {'✅' if near_sma960 else '❌'}
+- SMA{target_sma_period} 근처: {'✅' if near_target else '❌'}
 """
             self.send_telegram(telegram_msg.strip())
 
@@ -209,12 +214,19 @@ class Notifier:
         if level == "ERROR" and self.telegram_enabled:
             self.send_telegram(f"⚠️ <b>시스템 에러</b>\n\n{message}")
 
-    def _format_sma_values_html(self, sma_values: Dict[int, float]) -> str:
+    def _format_sma_values_html(self, sma_values: Dict[int, float], target_sma_period: int = 960) -> str:
         """SMA 값들을 HTML 포맷으로 변환"""
         parts = []
-        for period in sorted(sma_values.keys(), reverse=True):
-            value = sma_values[period]
-            parts.append(f"SMA{period}: {value:.4f}")
+        # target_sma_period에 따라 표시할 SMA 결정
+        if target_sma_period == 960:
+            display_periods = [960, 480, 240, 120]
+        else:  # 480
+            display_periods = [480, 240, 120]
+
+        for period in display_periods:
+            if period in sma_values:
+                value = sma_values[period]
+                parts.append(f"SMA{period}: {value:.4f}")
         return "\n".join(parts)
 
     def test_notifications(self):

@@ -33,38 +33,37 @@ class SignalDetector:
         logger.info(f"시그널 감지기 초기화: SMA{target_sma} 돌파, {confirm_candles}캔들 확인, "
                    f"{cooldown}초 쿨다운")
 
-    def check_near_sma960(self, df: pd.DataFrame, tolerance_pct: float = 5.0) -> bool:
+    def check_near_target_sma(self, df: pd.DataFrame, target_sma: int, tolerance_pct: float = 5.0) -> bool:
         """
-        종가가 SMA960의 ±tolerance_pct% 이내인지 확인
+        종가가 target SMA의 ±tolerance_pct% 이내인지 확인
 
         Args:
             df: SMA가 계산된 데이터프레임
+            target_sma: 기준 SMA (960 또는 480)
             tolerance_pct: 허용 오차 퍼센트 (기본 5%)
 
         Returns:
-            SMA960 근처 여부
+            target SMA 근처 여부
         """
-        if df.empty or self.target_sma_col not in df.columns:
+        target_sma_col = f'sma_{target_sma}'
+
+        if df.empty or target_sma_col not in df.columns:
             return False
 
         # 현재 캔들
         current_candle = df.iloc[-1]
         current_close = current_candle['close']
-        current_sma = current_candle[self.target_sma_col]
+        current_sma = current_candle[target_sma_col]
 
         # NaN 체크
         if pd.isna(current_close) or pd.isna(current_sma):
             return False
 
-        # 종가가 SMA960의 ±tolerance_pct% 이내인지 확인
+        # 종가가 target SMA의 ±tolerance_pct% 이내인지 확인
         lower_bound = current_sma * (1 - tolerance_pct / 100)
         upper_bound = current_sma * (1 + tolerance_pct / 100)
 
         is_near = lower_bound <= current_close <= upper_bound
-
-        if is_near:
-            diff_pct = ((current_close - current_sma) / current_sma) * 100
-            # 심볼 정보는 analyze_signal에서 전달받을 것이므로 여기서는 로그 제거
 
         return is_near
 
@@ -191,7 +190,7 @@ class SignalDetector:
         logger.debug(f"{symbol}: 알림 기록됨")
 
     def analyze_signal(self, symbol: str, df: pd.DataFrame, sma_values: Dict[int, float],
-                      reverse_aligned: bool, breakout_type: str = "CLOSE") -> Optional[Dict]:
+                      reverse_aligned: bool, actual_target_sma: int, breakout_type: str = "CLOSE") -> Optional[Dict]:
         """
         종합 시그널 분석
 
@@ -200,16 +199,21 @@ class SignalDetector:
             df: SMA가 계산된 데이터프레임
             sma_values: 현재 SMA 값들
             reverse_aligned: 역배열 여부
+            actual_target_sma: 실제 사용된 target SMA (960 또는 480)
             breakout_type: 돌파 타입 (CLOSE, BODY, NEAR)
 
         Returns:
             시그널 정보 딕셔너리 (시그널 없으면 None)
         """
-        # SMA960 근처 확인
-        near_sma960 = self.check_near_sma960(df, tolerance_pct=5.0)
+        # target SMA가 0이면 (데이터 부족) 스킵
+        if actual_target_sma == 0:
+            return None
 
-        # 조건: 역배열 AND SMA960 근처
-        if not (reverse_aligned and near_sma960):
+        # target SMA 근처 확인
+        near_target = self.check_near_target_sma(df, actual_target_sma, tolerance_pct=5.0)
+
+        # 조건: 역배열 AND target SMA 근처
+        if not (reverse_aligned and near_target):
             return None
 
         # 쿨다운 확인
@@ -221,8 +225,13 @@ class SignalDetector:
         current_price = current_candle['close']
         current_time = df.index[-1]
 
-        # 시그널 타입 (항상 역배열 AND SMA960 근처)
-        signal_type = "REVERSE_ALIGNED_AND_NEAR"
+        # 시그널 타입
+        if actual_target_sma == 960:
+            signal_type = "REVERSE_ALIGNED_AND_NEAR_SMA960"
+        elif actual_target_sma == 480:
+            signal_type = "REVERSE_ALIGNED_AND_NEAR_SMA480"
+        else:
+            signal_type = "REVERSE_ALIGNED_AND_NEAR"
 
         # 시그널 정보 생성
         signal_info = {
@@ -230,10 +239,11 @@ class SignalDetector:
             'timestamp': current_time,
             'price': current_price,
             'sma_values': sma_values,
-            'target_sma': sma_values.get(self.target_sma),
+            'target_sma': sma_values.get(actual_target_sma),
+            'target_sma_period': actual_target_sma,
             'signal_type': signal_type,
             'reverse_aligned': reverse_aligned,
-            'near_sma960': near_sma960,
+            'near_target': near_target,
         }
 
         # 알림 기록
@@ -256,13 +266,17 @@ class SignalDetector:
         symbol = signal_info['symbol']
         price = signal_info['price']
         target_sma = signal_info['target_sma']
+        target_sma_period = signal_info.get('target_sma_period', 960)
         timestamp = signal_info['timestamp']
 
-        # 시그널 메시지 (항상 역배열 AND SMA960 근처)
-        signal_msg = "역배열 & SMA960 근처 (±5%)"
-        emoji = "🚀🎯"
+        # 시그널 메시지
+        signal_msg = f"역배열 & SMA{target_sma_period} 근처 (±5%)"
+        if target_sma_period == 960:
+            emoji = "🚀🎯"
+        else:  # 480
+            emoji = "⚡🎯"
 
-        # 종가와 SMA960 차이 계산
+        # 종가와 target SMA 차이 계산
         diff_pct = ((price - target_sma) / target_sma) * 100 if target_sma else 0
 
         summary = f"""
@@ -270,7 +284,7 @@ class SignalDetector:
 
 심볼: {symbol}
 현재가: {price:.4f}
-SMA960: {target_sma:.4f} (차이: {diff_pct:+.2f}%)
+SMA{target_sma_period}: {target_sma:.4f} (차이: {diff_pct:+.2f}%)
 시간: {timestamp}
 """
         return summary.strip()

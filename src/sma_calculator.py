@@ -142,6 +142,62 @@ class SMACalculator:
 
         return (score / max_score * 100) if max_score > 0 else 0.0
 
+    def get_available_target_sma(self, sma_values: Dict[int, float]) -> int:
+        """
+        사용 가능한 target SMA 기간 반환
+        960이 있으면 960, 없으면 480, 그것도 없으면 0
+
+        Args:
+            sma_values: {기간: SMA값} 딕셔너리
+
+        Returns:
+            사용 가능한 target SMA 기간 (960, 480, 또는 0)
+        """
+        # 960 체크
+        if 960 in sma_values and not pd.isna(sma_values[960]):
+            return 960
+
+        # 480 체크
+        if 480 in sma_values and not pd.isna(sma_values[480]):
+            return 480
+
+        return 0
+
+    def check_reverse_alignment_flexible(self, sma_values: Dict[int, float], target_sma: int) -> bool:
+        """
+        유연한 역배열 확인 (target_sma에 따라 다른 기간 사용)
+
+        Args:
+            sma_values: {기간: SMA값} 딕셔너리
+            target_sma: 기준 SMA (960 또는 480)
+
+        Returns:
+            역배열 여부
+        """
+        if target_sma == 960:
+            # 960 기준: SMA120 < SMA240 < SMA480 < SMA960
+            required_periods = [120, 240, 480, 960]
+        elif target_sma == 480:
+            # 480 기준: SMA120 < SMA240 < SMA480
+            required_periods = [120, 240, 480]
+        else:
+            return False
+
+        # 필요한 SMA가 모두 있는지 확인
+        for period in required_periods:
+            if period not in sma_values or pd.isna(sma_values[period]):
+                return False
+
+        # 역배열 확인
+        for i in range(len(required_periods) - 1):
+            current_period = required_periods[i]
+            next_period = required_periods[i + 1]
+
+            if sma_values[current_period] >= sma_values[next_period]:
+                return False
+
+        return True
+
     def format_sma_values(self, sma_values: Dict[int, float]) -> str:
         """
         SMA 값들을 보기 좋게 포맷팅

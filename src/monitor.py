@@ -123,25 +123,33 @@ class SMAMonitor:
                 logger.debug(f"{symbol}: SMA 계산 실패")
                 return False
 
-            # 역배열 확인
-            reverse_aligned = self.sma_calculator.check_reverse_alignment(sma_values)
+            # 사용 가능한 target SMA 결정 (960 우선, 없으면 480)
+            actual_target_sma = self.sma_calculator.get_available_target_sma(sma_values)
 
-            # 디버그: SMA960 근처 체크
+            if actual_target_sma == 0:
+                logger.debug(f"{symbol}: SMA960/480 데이터 부족")
+                return False
+
+            # 역배열 확인 (target SMA에 따라 다른 기간 사용)
+            reverse_aligned = self.sma_calculator.check_reverse_alignment_flexible(sma_values, actual_target_sma)
+
+            # 디버그: target SMA 근처 체크
             current_price = df_with_sma.iloc[-1]['close']
-            sma960_value = sma_values.get(960)
-            if sma960_value:
-                diff_pct = ((current_price - sma960_value) / sma960_value) * 100
-                lower_bound = sma960_value * 0.95
-                upper_bound = sma960_value * 1.05
+            target_sma_value = sma_values.get(actual_target_sma)
+            if target_sma_value:
+                diff_pct = ((current_price - target_sma_value) / target_sma_value) * 100
+                lower_bound = target_sma_value * 0.95
+                upper_bound = target_sma_value * 1.05
                 if lower_bound <= current_price <= upper_bound:
-                    logger.info(f"{symbol}: SMA960 근처! 종가={current_price:.4f}, SMA960={sma960_value:.4f}, 차이={diff_pct:+.2f}%, 역배열={'✅' if reverse_aligned else '❌'}")
+                    logger.info(f"{symbol}: SMA{actual_target_sma} 근처! 종가={current_price:.4f}, SMA{actual_target_sma}={target_sma_value:.4f}, 차이={diff_pct:+.2f}%, 역배열={'✅' if reverse_aligned else '❌'}")
 
-            # 시그널 분석 (역배열이 아니어도 SMA960 근처면 시그널 발생 가능)
+            # 시그널 분석
             signal_info = self.signal_detector.analyze_signal(
                 symbol=symbol,
                 df=df_with_sma,
                 sma_values=sma_values,
                 reverse_aligned=reverse_aligned,
+                actual_target_sma=actual_target_sma,
                 breakout_type=self.breakout_type
             )
 
