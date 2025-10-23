@@ -239,3 +239,40 @@ class BinanceAPI:
         except BinanceAPIException as e:
             logger.error(f"{symbol} 24시간 통계 가져오기 실패: {e}")
             return None
+
+    def get_volume_change_pct(self, symbol: str) -> Optional[float]:
+        """
+        24시간 볼륨 변화율 계산 (오늘 vs 어제)
+
+        Args:
+            symbol: 심볼
+
+        Returns:
+            볼륨 변화율 (%) 또는 None
+        """
+        try:
+            # 1일봉 3개 가져오기 (오늘 진행중, 어제, 그저께)
+            klines = self.client.futures_klines(
+                symbol=symbol,
+                interval='1d',
+                limit=3
+            )
+
+            if len(klines) < 2:
+                logger.debug(f"{symbol}: 볼륨 변화 계산 불가 (데이터 부족)")
+                return None
+
+            # 최근 2일 볼륨 비교
+            today_volume = float(klines[-1][7])  # quote_volume (USDT 단위)
+            yesterday_volume = float(klines[-2][7])
+
+            if yesterday_volume == 0:
+                return None
+
+            volume_change_pct = ((today_volume - yesterday_volume) / yesterday_volume) * 100
+
+            return volume_change_pct
+
+        except (BinanceAPIException, IndexError, ValueError) as e:
+            logger.error(f"{symbol} 볼륨 변화 계산 실패: {e}")
+            return None

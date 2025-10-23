@@ -145,81 +145,47 @@ class SMACalculator:
     def get_available_target_sma(self, sma_values: Dict[int, float]) -> int:
         """
         사용 가능한 target SMA 기간 반환
-        960이 있으면 960, 없으면 480, 그것도 없으면 0
+        960만 사용
 
         Args:
             sma_values: {기간: SMA값} 딕셔너리
 
         Returns:
-            사용 가능한 target SMA 기간 (960, 480, 또는 0)
+            사용 가능한 target SMA 기간 (960 또는 0)
         """
-        # 960 체크
+        # 960만 체크
         if 960 in sma_values and not pd.isna(sma_values[960]):
             return 960
-
-        # 480 체크
-        if 480 in sma_values and not pd.isna(sma_values[480]):
-            return 480
 
         return 0
 
     def check_reverse_alignment_flexible(self, sma_values: Dict[int, float], target_sma: int) -> tuple:
         """
-        유연한 역배열 확인 (target_sma에 따라 다른 기간 사용)
+        역배열 확인: 960선 아래에 120, 240, 480이 모두 있으면 역배열
 
         Args:
             sma_values: {기간: SMA값} 딕셔너리
-            target_sma: 기준 SMA (960 또는 480)
+            target_sma: 기준 SMA (960만 사용)
 
         Returns:
             (역배열 여부, 역배열 타입)
-            - (True, "FULL"): 완전 역배열 (120 < 240 < 480 < 960)
-            - (True, "PARTIAL"): 부분 역배열 (120 > 240, 240 < 480 < 960) - 960선 기준만
+            - (True, "FULL"): 역배열 (120, 240, 480 모두 < 960)
             - (False, None): 역배열 아님
         """
-        if target_sma == 960:
-            # 960 기준
-            required_periods = [120, 240, 480, 960]
-        elif target_sma == 480:
-            # 480 기준 (완전 역배열만 체크)
-            required_periods = [120, 240, 480]
-        else:
+        # 960 기준만 사용
+        if target_sma != 960:
             return (False, None)
 
         # 필요한 SMA가 모두 있는지 확인
+        required_periods = [120, 240, 480, 960]
         for period in required_periods:
             if period not in sma_values or pd.isna(sma_values[period]):
                 return (False, None)
 
-        # 완전 역배열 확인: 모든 기간이 역순
-        is_full_reverse = True
-        for i in range(len(required_periods) - 1):
-            current_period = required_periods[i]
-            next_period = required_periods[i + 1]
-
-            if sma_values[current_period] >= sma_values[next_period]:
-                is_full_reverse = False
-                break
-
-        if is_full_reverse:
+        # 역배열 확인: 120, 240, 480이 모두 960보다 작으면 됨
+        sma_960 = sma_values[960]
+        if sma_values[120] < sma_960 and sma_values[240] < sma_960 and sma_values[480] < sma_960:
             return (True, "FULL")
-
-        # 부분 역배열 확인: 960선 기준일 때만 체크
-        # 조건: SMA120 > SMA240 AND SMA240 < SMA480 < SMA960
-        if target_sma == 960 and sma_values[120] > sma_values[240]:
-            # 240부터 나머지가 역배열인지 확인
-            rest_periods = required_periods[1:]  # [240, 480, 960]
-            is_rest_reverse = True
-            for i in range(len(rest_periods) - 1):
-                current_period = rest_periods[i]
-                next_period = rest_periods[i + 1]
-
-                if sma_values[current_period] >= sma_values[next_period]:
-                    is_rest_reverse = False
-                    break
-
-            if is_rest_reverse:
-                return (True, "PARTIAL")
 
         return (False, None)
 

@@ -61,6 +61,13 @@ class SMAMonitor:
         )
         self.breakout_type = breakout_config.get('TYPE', 'CLOSE')
 
+        # 모멘텀 설정
+        momentum_config = signal_config.get('MOMENTUM', {})
+        self.momentum_enabled = momentum_config.get('ENABLED', False)
+        self.momentum_min_volume = momentum_config.get('MIN_VOLUME_USD', 100_000_000)
+        self.momentum_min_price_change = momentum_config.get('MIN_PRICE_CHANGE_PCT', 15.0)
+        self.momentum_min_volume_change = momentum_config.get('MIN_VOLUME_CHANGE_PCT', 30.0)
+
         # 알림기
         notification_config = config.get('NOTIFICATION', {})
         self.notifier = Notifier(notification_config)
@@ -104,64 +111,81 @@ class SMAMonitor:
         Returns:
             시그널 발생 여부
         """
+        signal_detected = False
+
         try:
+            # 1. 역배열 시그널 체크
             # 캔들 데이터 가져오기 (SMA 계산에 충분한 양)
             limit = self.sma_calculator.max_period + 100
             df = self.api.get_klines(symbol, interval=self.timeframe, limit=limit)
 
             if df.empty:
                 logger.debug(f"{symbol}: 데이터 없음")
-                return False
+            else:
+                # SMA 계산
+                df_with_sma = self.sma_calculator.calculate_all_smas(df)
 
-            # SMA 계산
-            df_with_sma = self.sma_calculator.calculate_all_smas(df)
+                # 현재 SMA 값들
+                sma_values = self.sma_calculator.get_current_sma_values(df_with_sma)
 
-            # 현재 SMA 값들
-            sma_values = self.sma_calculator.get_current_sma_values(df_with_sma)
+                if sma_values:
+                    # 사용 가능한 target SMA 결정 (960만)
+                    actual_target_sma = self.sma_calculator.get_available_target_sma(sma_values)
 
-            if not sma_values:
-                logger.debug(f"{symbol}: SMA 계산 실패")
-                return False
+                    if actual_target_sma != 0:
+                        # 역배열 확인
+                        reverse_aligned, reverse_type = self.sma_calculator.check_reverse_alignment_flexible(sma_values, actual_target_sma)
 
-            # 사용 가능한 target SMA 결정 (960 우선, 없으면 480)
-            actual_target_sma = self.sma_calculator.get_available_target_sma(sma_values)
+                        # 디버그: target SMA 근처 체크
+                        current_price = df_with_sma.iloc[-1]['close']
+                        target_sma_value = sma_values.get(actual_target_sma)
+                        if target_sma_value:
+                            diff_pct = ((current_price - target_sma_value) / target_sma_value) * 100
+                            lower_bound = target_sma_value * 0.95
+                            upper_bound = target_sma_value * 1.05
+                            if lower_bound <= current_price <= upper_bound:
+                                reverse_label = f"✅({reverse_type})" if reverse_aligned else "❌"
+                                logger.info(f"{symbol}: SMA{actual_target_sma} 근처! 종가={current_price:.4f}, SMA{actual_target_sma}={target_sma_value:.4f}, 차이={diff_pct:+.2f}%, 역배열={reverse_label}")
 
-            if actual_target_sma == 0:
-                logger.debug(f"{symbol}: SMA960/480 데이터 부족")
-                return False
+                        # 역배열 시그널 분석
+                        signal_info = self.signal_detector.analyze_signal(
+                            symbol=symbol,
+                            df=df_with_sma,
+                            sma_values=sma_values,
+                            reverse_aligned=reverse_aligned,
+                            reverse_type=reverse_type,
+                            actual_target_sma=actual_target_sma,
+                            breakout_type=self.breakout_type
+                        )
 
-            # 역배열 확인 (target SMA에 따라 다른 기간 사용)
-            reverse_aligned, reverse_type = self.sma_calculator.check_reverse_alignment_flexible(sma_values, actual_target_sma)
+                        if signal_info:
+                            # 역배열 시그널 발생!
+                            summary = self.signal_detector.get_signal_summary(signal_info)
+                            self.notifier.send_signal_alert(signal_info, summary)
+                            signal_detected = True
 
-            # 디버그: target SMA 근처 체크
-            current_price = df_with_sma.iloc[-1]['close']
-            target_sma_value = sma_values.get(actual_target_sma)
-            if target_sma_value:
-                diff_pct = ((current_price - target_sma_value) / target_sma_value) * 100
-                lower_bound = target_sma_value * 0.95
-                upper_bound = target_sma_value * 1.05
-                if lower_bound <= current_price <= upper_bound:
-                    reverse_label = f"✅({reverse_type})" if reverse_aligned else "❌"
-                    logger.info(f"{symbol}: SMA{actual_target_sma} 근처! 종가={current_price:.4f}, SMA{actual_target_sma}={target_sma_value:.4f}, 차이={diff_pct:+.2f}%, 역배열={reverse_label}")
+            # 2. 모멘텀 시그널 체크 (활성화된 경우)
+            if self.momentum_enabled:
+                stats = self.api.get_24h_stats(symbol)
+                volume_change_pct = self.api.get_volume_change_pct(symbol)
 
-            # 시그널 분석
-            signal_info = self.signal_detector.analyze_signal(
-                symbol=symbol,
-                df=df_with_sma,
-                sma_values=sma_values,
-                reverse_aligned=reverse_aligned,
-                reverse_type=reverse_type,
-                actual_target_sma=actual_target_sma,
-                breakout_type=self.breakout_type
-            )
+                if stats:
+                    momentum_signal = self.signal_detector.analyze_momentum_signal(
+                        symbol=symbol,
+                        stats=stats,
+                        volume_change_pct=volume_change_pct,
+                        min_volume_usd=self.momentum_min_volume,
+                        min_price_change_pct=self.momentum_min_price_change,
+                        min_volume_change_pct=self.momentum_min_volume_change
+                    )
 
-            if signal_info:
-                # 시그널 발생!
-                summary = self.signal_detector.get_signal_summary(signal_info)
-                self.notifier.send_signal_alert(signal_info, summary)
-                return True
+                    if momentum_signal:
+                        # 모멘텀 시그널 발생!
+                        summary = self.signal_detector.get_signal_summary(momentum_signal)
+                        self.notifier.send_signal_alert(momentum_signal, summary)
+                        signal_detected = True
 
-            return False
+            return signal_detected
 
         except Exception as e:
             logger.error(f"{symbol} 분석 중 오류: {e}")

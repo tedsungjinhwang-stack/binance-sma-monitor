@@ -227,13 +227,8 @@ class SignalDetector:
         current_price = current_candle['close']
         current_time = df.index[-1]
 
-        # 시그널 타입
-        if actual_target_sma == 960:
-            signal_type = "REVERSE_ALIGNED_AND_NEAR_SMA960"
-        elif actual_target_sma == 480:
-            signal_type = "REVERSE_ALIGNED_AND_NEAR_SMA480"
-        else:
-            signal_type = "REVERSE_ALIGNED_AND_NEAR"
+        # 시그널 타입 (960만 사용)
+        signal_type = "REVERSE_ALIGNED_AND_NEAR_SMA960"
 
         # 시그널 정보 생성
         signal_info = {
@@ -256,6 +251,60 @@ class SignalDetector:
 
         return signal_info
 
+    def analyze_momentum_signal(self, symbol: str, stats: Dict, volume_change_pct: float,
+                                min_volume_usd: float, min_price_change_pct: float,
+                                min_volume_change_pct: float) -> Optional[Dict]:
+        """
+        모멘텀 시그널 분석 (강력한 상승 모멘텀)
+
+        Args:
+            symbol: 심볼
+            stats: 24시간 통계 정보
+            volume_change_pct: 볼륨 변화율 (%)
+            min_volume_usd: 최소 거래량 (USD)
+            min_price_change_pct: 최소 상승률 (%)
+            min_volume_change_pct: 최소 볼륨 변화 (%)
+
+        Returns:
+            시그널 정보 딕셔너리 (시그널 없으면 None)
+        """
+        # 쿨다운 확인
+        if not self.should_send_alert(symbol):
+            return None
+
+        # 조건 확인
+        quote_volume = stats.get('quote_volume', 0)
+        price_change_pct = stats.get('price_change_percent', 0)
+
+        # 1. 거래량 체크
+        if quote_volume < min_volume_usd:
+            return None
+
+        # 2. 상승률 체크
+        if price_change_pct < min_price_change_pct:
+            return None
+
+        # 3. 볼륨 변화 체크
+        if volume_change_pct is None or volume_change_pct < min_volume_change_pct:
+            return None
+
+        # 모든 조건 만족! 시그널 생성
+        signal_info = {
+            'symbol': symbol,
+            'timestamp': pd.Timestamp.now(),
+            'signal_type': 'STRONG_MOMENTUM',
+            'quote_volume': quote_volume,
+            'price_change_percent': price_change_pct,
+            'volume_change_percent': volume_change_pct,
+        }
+
+        # 알림 기록
+        self.record_alert(symbol)
+
+        logger.info(f"모멘텀 시그널 발생: {symbol} (상승률: {price_change_pct:+.2f}%, 볼륨변화: {volume_change_pct:+.2f}%)")
+
+        return signal_info
+
     def get_signal_summary(self, signal_info: Dict) -> str:
         """
         시그널 정보 요약
@@ -266,33 +315,56 @@ class SignalDetector:
         Returns:
             요약 문자열
         """
+        signal_type = signal_info.get('signal_type', '')
         symbol = signal_info['symbol']
-        price = signal_info['price']
-        target_sma = signal_info['target_sma']
-        target_sma_period = signal_info.get('target_sma_period', 960)
-        reverse_type = signal_info.get('reverse_type', 'FULL')
         timestamp = signal_info['timestamp']
 
-        # 시그널 메시지
-        if reverse_type == "PARTIAL":
-            signal_msg = f"120선 정배열 & SMA{target_sma_period} 근처 (±5%)"
-        else:  # FULL
-            signal_msg = f"역배열 & SMA{target_sma_period} 근처 (±5%)"
+        # 한국시간(KST) 변환 (UTC + 9시간)
+        if isinstance(timestamp, pd.Timestamp):
+            kst_time = timestamp + timedelta(hours=9)
+        else:
+            kst_time = timestamp + timedelta(hours=9)
 
-        if target_sma_period == 960:
+        # 시간 포맷팅
+        time_str = kst_time.strftime('%Y-%m-%d %H:%M:%S KST')
+
+        # 모멘텀 시그널
+        if signal_type == 'STRONG_MOMENTUM':
+            price_change_pct = signal_info['price_change_percent']
+            volume_change_pct = signal_info['volume_change_percent']
+
+            emoji = "⚡💥"
+            signal_msg = "강력한 모멘텀 감지"
+
+            summary = f"""
+{emoji} {signal_msg} {emoji}
+
+심볼: {symbol}
+24시간 상승률: {price_change_pct:+.2f}%
+24시간 볼륨변화: {volume_change_pct:+.2f}%
+시간: {time_str}
+"""
+            return summary.strip()
+
+        # 역배열 시그널 (기존)
+        else:
+            price = signal_info['price']
+            target_sma = signal_info['target_sma']
+            target_sma_period = signal_info.get('target_sma_period', 960)
+
+            # 시그널 메시지 (960만 사용)
+            signal_msg = f"역배열 & SMA960 근처 (±5%)"
             emoji = "🚀🎯"
-        else:  # 480
-            emoji = "⚡🎯"
 
-        # 종가와 target SMA 차이 계산
-        diff_pct = ((price - target_sma) / target_sma) * 100 if target_sma else 0
+            # 종가와 target SMA 차이 계산
+            diff_pct = ((price - target_sma) / target_sma) * 100 if target_sma else 0
 
-        summary = f"""
+            summary = f"""
 {emoji} {signal_msg} {emoji}
 
 심볼: {symbol}
 현재가: {price:.4f}
-SMA{target_sma_period}: {target_sma:.4f} (차이: {diff_pct:+.2f}%)
-시간: {timestamp}
+SMA960: {target_sma:.4f} (차이: {diff_pct:+.2f}%)
+시간: {time_str}
 """
-        return summary.strip()
+            return summary.strip()
