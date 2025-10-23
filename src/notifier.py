@@ -146,41 +146,67 @@ class Notifier:
             summary: 시그널 요약 메시지
         """
         symbol = signal_info['symbol']
-        price = signal_info['price']
+        signal_type = signal_info.get('signal_type', 'UNKNOWN')
 
         # 콘솔 출력
         self.send_console(summary)
 
         # 텔레그램 (HTML 포맷)
         if self.telegram_enabled:
-            signal_type = signal_info.get('signal_type', 'UNKNOWN')
-            reverse_aligned = signal_info.get('reverse_aligned', False)
-            reverse_type = signal_info.get('reverse_type', 'FULL')
-            near_target = signal_info.get('near_target', False)
-            target_sma = signal_info['target_sma']
-            target_sma_period = signal_info.get('target_sma_period', 960)
+            # 모멘텀 시그널
+            if signal_type == 'STRONG_MOMENTUM':
+                price_change_pct = signal_info['price_change_percent']
+                volume_change_pct = signal_info['volume_change_percent']
+                timestamp = signal_info['timestamp']
 
-            # 시그널 메시지
-            if reverse_type == "PARTIAL":
-                msg_title = f"120선 정배열 & SMA{target_sma_period} 근처 (±5%)"
-            else:  # FULL
-                msg_title = f"역배열 & SMA{target_sma_period} 근처 (±5%)"
+                # KST 변환
+                from datetime import timedelta
+                import pandas as pd
+                if isinstance(timestamp, pd.Timestamp):
+                    kst_time = timestamp + timedelta(hours=9)
+                else:
+                    kst_time = timestamp + timedelta(hours=9)
+                time_str = kst_time.strftime('%Y-%m-%d %H:%M:%S KST')
 
-            if target_sma_period == 960:
+                telegram_msg = f"""
+<b>⚡💥 강력한 모멘텀 감지 ⚡💥</b>
+
+<b>심볼:</b> {symbol}
+<b>24시간 상승률:</b> {price_change_pct:+.2f}%
+<b>24시간 볼륨변화:</b> {volume_change_pct:+.2f}%
+<b>시간:</b> {time_str}
+"""
+            # 역배열 시그널
+            else:
+                price = signal_info['price']
+                reverse_type = signal_info.get('reverse_type', 'FULL')
+                target_sma = signal_info['target_sma']
+                target_sma_period = signal_info.get('target_sma_period', 960)
+                timestamp = signal_info['timestamp']
+
+                # KST 변환
+                from datetime import timedelta
+                import pandas as pd
+                if isinstance(timestamp, pd.Timestamp):
+                    kst_time = timestamp + timedelta(hours=9)
+                else:
+                    kst_time = timestamp + timedelta(hours=9)
+                time_str = kst_time.strftime('%Y-%m-%d %H:%M:%S KST')
+
+                # 시그널 메시지
+                msg_title = f"역배열 & SMA960 근처 (±5%)"
                 emoji = "🚀🎯"
-            else:  # 480
-                emoji = "⚡🎯"
 
-            # 차이 계산
-            diff_pct = ((price - target_sma) / target_sma) * 100 if target_sma else 0
+                # 차이 계산
+                diff_pct = ((price - target_sma) / target_sma) * 100 if target_sma else 0
 
-            telegram_msg = f"""
+                telegram_msg = f"""
 <b>{emoji} {msg_title} {emoji}</b>
 
 <b>심볼:</b> {symbol}
 <b>현재가:</b> {price:.4f}
 <b>SMA{target_sma_period}:</b> {target_sma:.4f} (차이: {diff_pct:+.2f}%)
-<b>시간:</b> {signal_info['timestamp']}
+<b>시간:</b> {time_str}
 """
             self.send_telegram(telegram_msg.strip())
 
@@ -190,7 +216,10 @@ class Notifier:
 
         # 이메일
         if self.email_enabled:
-            subject = f"[Binance Alert] {symbol} SMA960 돌파!"
+            if signal_type == 'STRONG_MOMENTUM':
+                subject = f"[Binance Alert] {symbol} 강력한 모멘텀!"
+            else:
+                subject = f"[Binance Alert] {symbol} SMA960 근처!"
             self.send_email(subject, summary)
 
     def send_system_message(self, message: str, level: str = "INFO"):
