@@ -156,7 +156,6 @@ class Notifier:
             # 모멘텀 시그널
             if signal_type == 'STRONG_MOMENTUM':
                 price_change_pct = signal_info['price_change_percent']
-                volume_change_pct = signal_info['volume_change_percent']
                 timestamp = signal_info['timestamp']
 
                 # KST 변환
@@ -173,7 +172,6 @@ class Notifier:
 
 <b>심볼:</b> {symbol}
 <b>24시간 상승률:</b> {price_change_pct:+.2f}%
-<b>24시간 볼륨변화:</b> {volume_change_pct:+.2f}%
 <b>시간:</b> {time_str}
 """
             # 역배열 시그널
