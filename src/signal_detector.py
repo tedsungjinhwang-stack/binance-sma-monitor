@@ -251,19 +251,16 @@ class SignalDetector:
 
         return signal_info
 
-    def analyze_momentum_signal(self, symbol: str, stats: Dict, volume_change_pct: float,
-                                min_volume_usd: float, min_price_change_pct: float,
-                                min_volume_change_pct: float) -> Optional[Dict]:
+    def analyze_momentum_signal(self, symbol: str, stats: Dict,
+                                min_volume_usd: float, min_price_change_pct: float) -> Optional[Dict]:
         """
         모멘텀 시그널 분석 (강력한 상승 모멘텀)
 
         Args:
             symbol: 심볼
             stats: 24시간 통계 정보
-            volume_change_pct: 볼륨 변화율 (%)
             min_volume_usd: 최소 거래량 (USD)
             min_price_change_pct: 최소 상승률 (%)
-            min_volume_change_pct: 최소 볼륨 변화 (%)
 
         Returns:
             시그널 정보 딕셔너리 (시그널 없으면 None)
@@ -284,10 +281,6 @@ class SignalDetector:
         if price_change_pct < min_price_change_pct:
             return None
 
-        # 3. 볼륨 변화 체크
-        if volume_change_pct is None or volume_change_pct < min_volume_change_pct:
-            return None
-
         # 모든 조건 만족! 시그널 생성
         signal_info = {
             'symbol': symbol,
@@ -295,13 +288,12 @@ class SignalDetector:
             'signal_type': 'STRONG_MOMENTUM',
             'quote_volume': quote_volume,
             'price_change_percent': price_change_pct,
-            'volume_change_percent': volume_change_pct,
         }
 
         # 알림 기록
         self.record_alert(symbol)
 
-        logger.info(f"모멘텀 시그널 발생: {symbol} (상승률: {price_change_pct:+.2f}%, 볼륨변화: {volume_change_pct:+.2f}%)")
+        logger.info(f"모멘텀 시그널 발생: {symbol} (상승률: {price_change_pct:+.2f}%)")
 
         return signal_info
 
@@ -331,7 +323,6 @@ class SignalDetector:
         # 모멘텀 시그널
         if signal_type == 'STRONG_MOMENTUM':
             price_change_pct = signal_info['price_change_percent']
-            volume_change_pct = signal_info['volume_change_percent']
 
             emoji = "⚡💥"
             signal_msg = "강력한 모멘텀 감지"
@@ -341,7 +332,6 @@ class SignalDetector:
 
 심볼: {symbol}
 24시간 상승률: {price_change_pct:+.2f}%
-24시간 볼륨변화: {volume_change_pct:+.2f}%
 시간: {time_str}
 """
             return summary.strip()

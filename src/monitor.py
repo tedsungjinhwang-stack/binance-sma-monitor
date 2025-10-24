@@ -66,7 +66,6 @@ class SMAMonitor:
         self.momentum_enabled = momentum_config.get('ENABLED', False)
         self.momentum_min_volume = momentum_config.get('MIN_VOLUME_USD', 100_000_000)
         self.momentum_min_price_change = momentum_config.get('MIN_PRICE_CHANGE_PCT', 15.0)
-        self.momentum_min_volume_change = momentum_config.get('MIN_VOLUME_CHANGE_PCT', 30.0)
 
         # 알림기
         notification_config = config.get('NOTIFICATION', {})
@@ -167,16 +166,13 @@ class SMAMonitor:
             # 2. 모멘텀 시그널 체크 (활성화된 경우)
             if self.momentum_enabled:
                 stats = self.api.get_24h_stats(symbol)
-                volume_change_pct = self.api.get_volume_change_pct(symbol)
 
                 if stats:
                     momentum_signal = self.signal_detector.analyze_momentum_signal(
                         symbol=symbol,
                         stats=stats,
-                        volume_change_pct=volume_change_pct,
                         min_volume_usd=self.momentum_min_volume,
-                        min_price_change_pct=self.momentum_min_price_change,
-                        min_volume_change_pct=self.momentum_min_volume_change
+                        min_price_change_pct=self.momentum_min_price_change
                     )
 
                     if momentum_signal:
