@@ -179,7 +179,7 @@ class Notifier:
                 price = signal_info['price']
                 reverse_type = signal_info.get('reverse_type', 'FULL')
                 target_sma = signal_info['target_sma']
-                target_sma_period = signal_info.get('target_sma_period', 960)
+                target_sma_period = signal_info.get('target_sma_period', 1792)
                 timestamp = signal_info['timestamp']
 
                 # KST 변환
@@ -192,7 +192,7 @@ class Notifier:
                 time_str = kst_time.strftime('%Y-%m-%d %H:%M:%S KST')
 
                 # 시그널 메시지
-                msg_title = f"역배열 & SMA960 근처 (±5%)"
+                msg_title = f"역배열 & SMA1792 근처 (±5%)"
                 emoji = "🚀🎯"
 
                 # 차이 계산
@@ -217,7 +217,7 @@ class Notifier:
             if signal_type == 'STRONG_MOMENTUM':
                 subject = f"[Binance Alert] {symbol} 강력한 모멘텀!"
             else:
-                subject = f"[Binance Alert] {symbol} SMA960 근처!"
+                subject = f"[Binance Alert] {symbol} SMA1792 근처!"
             self.send_email(subject, summary)
 
     def send_system_message(self, message: str, level: str = "INFO"):
@@ -238,12 +238,12 @@ class Notifier:
         if level == "ERROR" and self.telegram_enabled:
             self.send_telegram(f"⚠️ <b>시스템 에러</b>\n\n{message}")
 
-    def _format_sma_values_html(self, sma_values: Dict[int, float], target_sma_period: int = 960) -> str:
+    def _format_sma_values_html(self, sma_values: Dict[int, float], target_sma_period: int = 1792) -> str:
         """SMA 값들을 HTML 포맷으로 변환"""
         parts = []
         # target_sma_period에 따라 표시할 SMA 결정
-        if target_sma_period == 960:
-            display_periods = [960, 480, 240, 120]
+        if target_sma_period == 1792:
+            display_periods = [1792, 896, 448, 224]
         else:  # 480
             display_periods = [480, 240, 120]
 

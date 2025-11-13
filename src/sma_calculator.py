@@ -145,46 +145,46 @@ class SMACalculator:
     def get_available_target_sma(self, sma_values: Dict[int, float]) -> int:
         """
         사용 가능한 target SMA 기간 반환
-        960만 사용
+        1792만 사용 (1시간봉 448선)
 
         Args:
             sma_values: {기간: SMA값} 딕셔너리
 
         Returns:
-            사용 가능한 target SMA 기간 (960 또는 0)
+            사용 가능한 target SMA 기간 (1792 또는 0)
         """
-        # 960만 체크
-        if 960 in sma_values and not pd.isna(sma_values[960]):
-            return 960
+        # 1792만 체크
+        if 1792 in sma_values and not pd.isna(sma_values[1792]):
+            return 1792
 
         return 0
 
     def check_reverse_alignment_flexible(self, sma_values: Dict[int, float], target_sma: int) -> tuple:
         """
-        역배열 확인: 960선 아래에 120, 240, 480이 모두 있으면 역배열
+        역배열 확인: 1792선 아래에 224, 448, 896이 모두 있으면 역배열
 
         Args:
             sma_values: {기간: SMA값} 딕셔너리
-            target_sma: 기준 SMA (960만 사용)
+            target_sma: 기준 SMA (1792만 사용)
 
         Returns:
             (역배열 여부, 역배열 타입)
-            - (True, "FULL"): 역배열 (120, 240, 480 모두 < 960)
+            - (True, "FULL"): 역배열 (224, 448, 896 모두 < 1792)
             - (False, None): 역배열 아님
         """
-        # 960 기준만 사용
-        if target_sma != 960:
+        # 1792 기준만 사용
+        if target_sma != 1792:
             return (False, None)
 
         # 필요한 SMA가 모두 있는지 확인
-        required_periods = [120, 240, 480, 960]
+        required_periods = [224, 448, 896, 1792]
         for period in required_periods:
             if period not in sma_values or pd.isna(sma_values[period]):
                 return (False, None)
 
-        # 역배열 확인: 120, 240, 480이 모두 960보다 작으면 됨
-        sma_960 = sma_values[960]
-        if sma_values[120] < sma_960 and sma_values[240] < sma_960 and sma_values[480] < sma_960:
+        # 역배열 확인: 224, 448, 896이 모두 1792보다 작으면 됨
+        sma_1792 = sma_values[1792]
+        if sma_values[224] < sma_1792 and sma_values[448] < sma_1792 and sma_values[896] < sma_1792:
             return (True, "FULL")
 
         return (False, None)

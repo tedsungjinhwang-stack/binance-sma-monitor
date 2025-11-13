@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class SignalDetector:
     """시그널 감지기"""
 
-    def __init__(self, target_sma: int = 960, confirm_candles: int = 1, cooldown: int = 3600):
+    def __init__(self, target_sma: int = 1792, confirm_candles: int = 1, cooldown: int = 3600):
         """
         초기화
 
@@ -39,7 +39,7 @@ class SignalDetector:
 
         Args:
             df: SMA가 계산된 데이터프레임
-            target_sma: 기준 SMA (960 또는 480)
+            target_sma: 기준 SMA (1792)
             tolerance_pct: 허용 오차 퍼센트 (기본 5%)
 
         Returns:
@@ -201,7 +201,7 @@ class SignalDetector:
             sma_values: 현재 SMA 값들
             reverse_aligned: 역배열 여부
             reverse_type: 역배열 타입 ("FULL", "PARTIAL", None)
-            actual_target_sma: 실제 사용된 target SMA (960 또는 480)
+            actual_target_sma: 실제 사용된 target SMA (1792)
             breakout_type: 돌파 타입 (CLOSE, BODY, NEAR)
 
         Returns:
@@ -227,8 +227,8 @@ class SignalDetector:
         current_price = current_candle['close']
         current_time = df.index[-1]
 
-        # 시그널 타입 (960만 사용)
-        signal_type = "REVERSE_ALIGNED_AND_NEAR_SMA960"
+        # 시그널 타입 (1792만 사용)
+        signal_type = "REVERSE_ALIGNED_AND_NEAR_SMA1792"
 
         # 시그널 정보 생성
         signal_info = {
@@ -340,10 +340,10 @@ class SignalDetector:
         else:
             price = signal_info['price']
             target_sma = signal_info['target_sma']
-            target_sma_period = signal_info.get('target_sma_period', 960)
+            target_sma_period = signal_info.get('target_sma_period', 1792)
 
-            # 시그널 메시지 (960만 사용)
-            signal_msg = f"역배열 & SMA960 근처 (±5%)"
+            # 시그널 메시지 (1792만 사용)
+            signal_msg = f"역배열 & SMA1792 근처 (±5%)"
             emoji = "🚀🎯"
 
             # 종가와 target SMA 차이 계산
@@ -354,7 +354,7 @@ class SignalDetector:
 
 심볼: {symbol}
 현재가: {price:.4f}
-SMA960: {target_sma:.4f} (차이: {diff_pct:+.2f}%)
+SMA1792: {target_sma:.4f} (차이: {diff_pct:+.2f}%)
 시간: {time_str}
 """
             return summary.strip()
