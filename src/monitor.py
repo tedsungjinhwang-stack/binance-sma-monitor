@@ -81,7 +81,11 @@ class SMAMonitor:
         logger.info("심볼 리스트 업데이트 중...")
 
         if self.coin_filter_mode == 'ALL':
-            self.symbols = self.api.get_futures_symbols()
+            # ALL 모드: 3일 상승률 기반 필터 사용
+            self.symbols = self.api.get_filtered_symbols_by_momentum(
+                min_volume_usd=2_000_000,
+                min_3day_change_pct=8.0
+            )
         elif self.coin_filter_mode == 'TOP_VOLUME':
             self.symbols = self.api.get_top_volume_symbols(self.top_n)
         elif self.coin_filter_mode == 'FILTERED':
@@ -92,10 +96,10 @@ class SMAMonitor:
         elif self.coin_filter_mode == 'SPECIFIC':
             self.symbols = self.specific_coins
         else:
-            logger.warning(f"알 수 없는 필터 모드: {self.coin_filter_mode}. FILTERED 사용")
-            self.symbols = self.api.get_filtered_symbols(
-                min_volume_usd=self.min_volume_usd,
-                min_price_change_pct=self.min_price_change_pct
+            logger.warning(f"알 수 없는 필터 모드: {self.coin_filter_mode}. 3일 모멘텀 필터 사용")
+            self.symbols = self.api.get_filtered_symbols_by_momentum(
+                min_volume_usd=2_000_000,
+                min_3day_change_pct=8.0
             )
 
         logger.info(f"모니터링 대상: {len(self.symbols)}개 심볼")

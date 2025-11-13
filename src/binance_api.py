@@ -276,3 +276,110 @@ class BinanceAPI:
         except (BinanceAPIException, IndexError, ValueError) as e:
             logger.error(f"{symbol} 볼륨 변화 계산 실패: {e}")
             return None
+
+    def get_3day_price_change(self, symbol: str) -> Optional[float]:
+        """
+        3일 누적 상승률 계산 (3일 전 종가 → 현재 종가)
+
+        Args:
+            symbol: 심볼
+
+        Returns:
+            3일 상승률 (%) 또는 None
+        """
+        try:
+            # 일봉 4개 가져오기 (3일 전 + 오늘)
+            klines = self.client.futures_klines(
+                symbol=symbol,
+                interval='1d',
+                limit=4
+            )
+
+            if len(klines) < 4:
+                logger.debug(f"{symbol}: 3일 상승률 계산 불가 (데이터 부족)")
+                return None
+
+            # 3일 전 종가 vs 현재 종가
+            three_days_ago_close = float(klines[0][4])
+            current_close = float(klines[-1][4])
+
+            if three_days_ago_close == 0:
+                return None
+
+            price_change_pct = ((current_close - three_days_ago_close) / three_days_ago_close) * 100
+
+            return price_change_pct
+
+        except (BinanceAPIException, IndexError, ValueError) as e:
+            logger.debug(f"{symbol} 3일 상승률 계산 실패: {e}")
+            return None
+
+    def get_filtered_symbols_by_momentum(self, min_volume_usd: float = 2_000_000, min_3day_change_pct: float = 8.0) -> List[str]:
+        """
+        3일 상승률 기반 필터링
+        - 24시간 거래량 >= $2M (1차 필터)
+        - 3일 누적 상승률 >= +8% (2차 필터)
+
+        Args:
+            min_volume_usd: 최소 24시간 거래량 (USD)
+            min_3day_change_pct: 최소 3일 상승률 (%)
+
+        Returns:
+            필터링된 심볼 리스트
+        """
+        try:
+            # 1단계: 거래소 정보 가져오기
+            exchange_info = self.client.futures_exchange_info()
+            perpetual_symbols = {
+                s['symbol']
+                for s in exchange_info['symbols']
+                if s['symbol'].endswith('USDT')
+                   and s['status'] == 'TRADING'
+                   and s['contractType'] == 'PERPETUAL'
+            }
+
+            # 2단계: 24시간 거래량 필터
+            tickers = self.client.futures_ticker()
+            volume_filtered = []
+
+            for ticker in tickers:
+                symbol = ticker['symbol']
+                if symbol not in perpetual_symbols:
+                    continue
+
+                try:
+                    quote_volume = float(ticker.get('quoteVolume', 0))
+                    if quote_volume >= min_volume_usd:
+                        volume_filtered.append(symbol)
+                except (ValueError, TypeError):
+                    continue
+
+            logger.info(f"1단계 필터 (거래량≥${min_volume_usd/1_000_000:.1f}M): {len(volume_filtered)}개 심볼")
+
+            # 3단계: 3일 상승률 필터
+            momentum_filtered = []
+
+            for symbol in volume_filtered:
+                price_change = self.get_3day_price_change(symbol)
+
+                if price_change is not None and price_change >= min_3day_change_pct:
+                    momentum_filtered.append((symbol, price_change))
+                    logger.debug(f"{symbol}: 3일 상승률 {price_change:+.1f}%")
+
+                # API 레이트 리밋 방지
+                time.sleep(0.05)
+
+            # 상승률 높은 순으로 정렬
+            momentum_filtered.sort(key=lambda x: x[1], reverse=True)
+            filtered_symbols = [s[0] for s in momentum_filtered]
+
+            logger.info(f"2단계 필터 (3일 상승률≥{min_3day_change_pct:+.0f}%): {len(filtered_symbols)}개 심볼")
+
+            if filtered_symbols:
+                logger.info(f"필터링된 심볼 예시: {filtered_symbols[:10]}")
+
+            return filtered_symbols
+
+        except BinanceAPIException as e:
+            logger.error(f"모멘텀 필터링 실패: {e}")
+            return []
