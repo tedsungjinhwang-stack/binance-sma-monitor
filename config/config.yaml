@@ -14,10 +14,10 @@ MONITOR:
 
   # 모니터링할 코인 설정
   COIN_FILTER:
-    MODE: "ALL"  # ALL, TOP_VOLUME, FILTERED, SPECIFIC
-    # FILTERED 모드 설정 (사전필터 비활성화)
-    MIN_VOLUME_USD: 0  # 거래량 필터 제거
-    MIN_PRICE_CHANGE_PCT: 0  # 상승률 필터 제거
+    MODE: "FILTERED"  # ALL, TOP_VOLUME, FILTERED, SPECIFIC
+    # FILTERED 모드 설정 (거래량만 최소한으로 필터, 상승률 제거)
+    MIN_VOLUME_USD: 1000000  # 최소 거래량 1M USD (API 레이트 리밋 방지)
+    MIN_PRICE_CHANGE_PCT: -100  # 상승률 필터 제거 (하락장도 포함)
     # 레거시 옵션
     TOP_N: 50  # TOP_VOLUME 모드일 때 상위 N개 코인
     SPECIFIC_COINS:  # SPECIFIC 모드일 때 모니터링할 코인 목록
