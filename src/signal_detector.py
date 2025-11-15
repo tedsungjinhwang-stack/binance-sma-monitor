@@ -227,8 +227,8 @@ class SignalDetector:
         current_price = current_candle['close']
         current_time = df.index[-1]
 
-        # 시그널 타입 (1792만 사용)
-        signal_type = "REVERSE_ALIGNED_AND_NEAR_SMA1792"
+        # 시그널 타입 (960만 사용)
+        signal_type = "REVERSE_ALIGNED_AND_NEAR_SMA960"
 
         # 시그널 정보 생성
         signal_info = {
@@ -340,10 +340,10 @@ class SignalDetector:
         else:
             price = signal_info['price']
             target_sma = signal_info['target_sma']
-            target_sma_period = signal_info.get('target_sma_period', 1792)
+            target_sma_period = signal_info.get('target_sma_period', 960)
 
-            # 시그널 메시지 (1792만 사용)
-            signal_msg = f"역배열 & SMA1792 근처 (±5%)"
+            # 시그널 메시지 (960만 사용)
+            signal_msg = f"역배열 & SMA960 근처 (±5%)"
             emoji = "🚀🎯"
 
             # 종가와 target SMA 차이 계산
@@ -354,7 +354,7 @@ class SignalDetector:
 
 심볼: {symbol}
 현재가: {price:.4f}
-SMA1792: {target_sma:.4f} (차이: {diff_pct:+.2f}%)
+SMA960: {target_sma:.4f} (차이: {diff_pct:+.2f}%)
 시간: {time_str}
 """
             return summary.strip()
