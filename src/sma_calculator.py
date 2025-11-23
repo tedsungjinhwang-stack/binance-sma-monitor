@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class SMACalculator:
     """SMA 계산기"""
 
-    def __init__(self, periods: List[int] = [120, 240, 480, 960]):
+    def __init__(self, periods: List[int] = [120, 240, 480]):
         """
         초기화
 
@@ -79,7 +79,7 @@ class SMACalculator:
             if period not in sma_values or pd.isna(sma_values[period]):
                 return False
 
-        # 역배열 확인: SMA960 > SMA480 > SMA240 > SMA120
+        # 역배열 확인: SMA480 > SMA240 > SMA120 (1시간봉 기준)
         sorted_periods = sorted(self.periods)
         for i in range(len(sorted_periods) - 1):
             current_period = sorted_periods[i]
@@ -145,46 +145,46 @@ class SMACalculator:
     def get_available_target_sma(self, sma_values: Dict[int, float]) -> int:
         """
         사용 가능한 target SMA 기간 반환
-        960만 사용 (15분봉 960선)
+        480만 사용 (1시간봉 480선)
 
         Args:
             sma_values: {기간: SMA값} 딕셔너리
 
         Returns:
-            사용 가능한 target SMA 기간 (960 또는 0)
+            사용 가능한 target SMA 기간 (480 또는 0)
         """
-        # 960만 체크
-        if 960 in sma_values and not pd.isna(sma_values[960]):
-            return 960
+        # 480만 체크
+        if 480 in sma_values and not pd.isna(sma_values[480]):
+            return 480
 
         return 0
 
     def check_reverse_alignment_flexible(self, sma_values: Dict[int, float], target_sma: int) -> tuple:
         """
-        역배열 확인: 960선 아래에 120, 240, 480이 모두 있으면 역배열
+        역배열 확인: 480선 아래에 120, 240이 모두 있으면 역배열 (1시간봉 기준)
 
         Args:
             sma_values: {기간: SMA값} 딕셔너리
-            target_sma: 기준 SMA (960만 사용)
+            target_sma: 기준 SMA (480만 사용)
 
         Returns:
             (역배열 여부, 역배열 타입)
-            - (True, "FULL"): 역배열 (120, 240, 480 모두 < 960)
+            - (True, "FULL"): 역배열 (120, 240 모두 < 480)
             - (False, None): 역배열 아님
         """
-        # 960 기준만 사용
-        if target_sma != 960:
+        # 480 기준만 사용
+        if target_sma != 480:
             return (False, None)
 
         # 필요한 SMA가 모두 있는지 확인
-        required_periods = [120, 240, 480, 960]
+        required_periods = [120, 240, 480]
         for period in required_periods:
             if period not in sma_values or pd.isna(sma_values[period]):
                 return (False, None)
 
-        # 역배열 확인: 120, 240, 480이 모두 960보다 작으면 됨
-        sma_960 = sma_values[960]
-        if sma_values[120] < sma_960 and sma_values[240] < sma_960 and sma_values[480] < sma_960:
+        # 역배열 확인: 120, 240이 모두 480보다 작으면 됨
+        sma_480 = sma_values[480]
+        if sma_values[120] < sma_480 and sma_values[240] < sma_480:
             return (True, "FULL")
 
         return (False, None)

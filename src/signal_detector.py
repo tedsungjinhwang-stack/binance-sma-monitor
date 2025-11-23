@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class SignalDetector:
     """시그널 감지기"""
 
-    def __init__(self, target_sma: int = 1792, confirm_candles: int = 1, cooldown: int = 3600):
+    def __init__(self, target_sma: int = 480, confirm_candles: int = 1, cooldown: int = 3600):
         """
         초기화
 
@@ -39,7 +39,7 @@ class SignalDetector:
 
         Args:
             df: SMA가 계산된 데이터프레임
-            target_sma: 기준 SMA (1792)
+            target_sma: 기준 SMA (480, 1시간봉)
             tolerance_pct: 허용 오차 퍼센트 (기본 5%)
 
         Returns:
@@ -201,7 +201,7 @@ class SignalDetector:
             sma_values: 현재 SMA 값들
             reverse_aligned: 역배열 여부
             reverse_type: 역배열 타입 ("FULL", "PARTIAL", None)
-            actual_target_sma: 실제 사용된 target SMA (1792)
+            actual_target_sma: 실제 사용된 target SMA (480, 1시간봉)
             breakout_type: 돌파 타입 (CLOSE, BODY, NEAR)
 
         Returns:
@@ -218,17 +218,40 @@ class SignalDetector:
         if not (reverse_aligned and near_target):
             return None
 
-        # 쿨다운 확인
-        if not self.should_send_alert(symbol):
+        # 추가 필터: 24시간 모멘텀 체크 (상승률 5% + 거래량 10M)
+        candles_24h = 24  # 24시간 = 24개 1시간봉
+
+        if len(df) < candles_24h + 1:
             return None
 
         # 현재 캔들 정보
         current_candle = df.iloc[-1]
         current_price = current_candle['close']
+
+        # 24시간 전 가격
+        past_candle = df.iloc[-(candles_24h + 1)]
+        past_price = past_candle['close']
+
+        # 24시간 상승률 계산
+        price_change_24h = ((current_price - past_price) / past_price) * 100
+
+        # 24시간 거래량 계산
+        df_temp = df.copy()
+        df_temp['quote_volume'] = df_temp['volume'] * df_temp['close']
+        volume_24h = df_temp.tail(candles_24h)['quote_volume'].sum()
+
+        # 24시간 모멘텀 필터: 상승률 5% 이상 AND 거래량 10M 이상
+        if price_change_24h < 5.0 or volume_24h < 10_000_000:
+            return None
+
+        # 쿨다운 확인
+        if not self.should_send_alert(symbol):
+            return None
+
         current_time = df.index[-1]
 
-        # 시그널 타입 (960만 사용)
-        signal_type = "REVERSE_ALIGNED_AND_NEAR_SMA960"
+        # 시그널 타입 (480만 사용, 1시간봉)
+        signal_type = "REVERSE_ALIGNED_AND_NEAR_SMA480"
 
         # 시그널 정보 생성
         signal_info = {
@@ -248,6 +271,84 @@ class SignalDetector:
         self.record_alert(symbol)
 
         logger.info(f"시그널 발생: {symbol} @ {current_price:.4f} (타입: {signal_type}, 역배열: {reverse_type})")
+
+        return signal_info
+
+    def analyze_momentum_signal_rolling(self, symbol: str, df: pd.DataFrame, timeframe: str,
+                                       min_volume_usd: float, min_price_change_pct: float) -> Optional[Dict]:
+        """
+        모멘텀 시그널 분석 (Rolling 기준)
+
+        Args:
+            symbol: 심볼
+            df: 캔들 데이터프레임
+            timeframe: 시간 기준 (4h, 6h, 12h, 24h)
+            min_volume_usd: 최소 거래량 (USD)
+            min_price_change_pct: 최소 상승률 (%)
+
+        Returns:
+            시그널 정보 딕셔너리 (시그널 없으면 None)
+        """
+        # 쿨다운 확인
+        if not self.should_send_alert(symbol):
+            return None
+
+        if df.empty:
+            return None
+
+        # 시간 기준에 따른 캔들 수 매핑
+        timeframe_candles = {
+            '4h': 16,   # 4시간 = 16개 15분봉
+            '6h': 24,   # 6시간 = 24개 15분봉
+            '12h': 48,  # 12시간 = 48개 15분봉
+            '24h': 96,  # 24시간 = 96개 15분봉
+        }
+
+        candles = timeframe_candles.get(timeframe, 96)
+
+        # 충분한 데이터가 있는지 확인
+        if len(df) < candles + 1:
+            return None
+
+        # 현재 캔들
+        current_candle = df.iloc[-1]
+        current_price = current_candle['close']
+
+        # N시간 전 가격
+        past_candle = df.iloc[-(candles + 1)]
+        past_price = past_candle['close']
+
+        # 상승률 계산
+        price_change_pct = ((current_price - past_price) / past_price) * 100
+
+        # 거래량 계산 (N시간)
+        df['quote_volume'] = df['volume'] * df['close']
+        recent_volume = df.tail(candles)['quote_volume'].sum()
+
+        # 조건 확인
+        # 1. 상승률 체크
+        if price_change_pct < min_price_change_pct:
+            return None
+
+        # 2. 거래량 체크
+        if recent_volume < min_volume_usd:
+            return None
+
+        # 모든 조건 만족! 시그널 생성
+        signal_info = {
+            'symbol': symbol,
+            'timestamp': df.index[-1],
+            'signal_type': f'STRONG_MOMENTUM_{timeframe.upper()}',
+            'timeframe': timeframe,
+            'quote_volume': recent_volume,
+            'price_change_percent': price_change_pct,
+            'current_price': current_price,
+        }
+
+        # 알림 기록
+        self.record_alert(symbol)
+
+        logger.info(f"모멘텀 시그널 발생: {symbol} ({timeframe} 상승률: {price_change_pct:+.2f}%)")
 
         return signal_info
 
@@ -321,8 +422,9 @@ class SignalDetector:
         time_str = kst_time.strftime('%Y-%m-%d %H:%M:%S KST')
 
         # 모멘텀 시그널
-        if signal_type == 'STRONG_MOMENTUM':
+        if signal_type.startswith('STRONG_MOMENTUM'):
             price_change_pct = signal_info['price_change_percent']
+            timeframe = signal_info.get('timeframe', '24h')
 
             emoji = "⚡💥"
             signal_msg = "강력한 모멘텀 감지"
@@ -331,7 +433,7 @@ class SignalDetector:
 {emoji} {signal_msg} {emoji}
 
 심볼: {symbol}
-24시간 상승률: {price_change_pct:+.2f}%
+{timeframe} 상승률: {price_change_pct:+.2f}%
 시간: {time_str}
 """
             return summary.strip()
@@ -340,10 +442,10 @@ class SignalDetector:
         else:
             price = signal_info['price']
             target_sma = signal_info['target_sma']
-            target_sma_period = signal_info.get('target_sma_period', 960)
+            target_sma_period = signal_info.get('target_sma_period', 480)
 
-            # 시그널 메시지 (960만 사용)
-            signal_msg = f"역배열 & SMA960 근처 (±5%)"
+            # 시그널 메시지 (480만 사용, 1시간봉)
+            signal_msg = f"역배열 & SMA480 근처 (±5%)"
             emoji = "🚀🎯"
 
             # 종가와 target SMA 차이 계산
@@ -354,7 +456,7 @@ class SignalDetector:
 
 심볼: {symbol}
 현재가: {price:.4f}
-SMA960: {target_sma:.4f} (차이: {diff_pct:+.2f}%)
+SMA480: {target_sma:.4f} (차이: {diff_pct:+.2f}%)
 시간: {time_str}
 """
             return summary.strip()

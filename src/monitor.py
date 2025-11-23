@@ -64,6 +64,7 @@ class SMAMonitor:
         # 모멘텀 설정
         momentum_config = signal_config.get('MOMENTUM', {})
         self.momentum_enabled = momentum_config.get('ENABLED', False)
+        self.momentum_timeframe = momentum_config.get('TIMEFRAME', '24h')  # 4h, 6h, 12h, 24h
         self.momentum_min_volume = momentum_config.get('MIN_VOLUME_USD', 100_000_000)
         self.momentum_min_price_change = momentum_config.get('MIN_PRICE_CHANGE_PCT', 15.0)
 
@@ -162,28 +163,38 @@ class SMAMonitor:
                         )
 
                         if signal_info:
+                            # 거래대금 순위 및 거래대금 추가
+                            volume_info = self.api.get_volume_rank(symbol)
+                            if volume_info:
+                                signal_info['volume_rank'] = volume_info['rank']
+                                signal_info['quote_volume'] = volume_info['quote_volume']
+
                             # 역배열 시그널 발생!
                             summary = self.signal_detector.get_signal_summary(signal_info)
                             self.notifier.send_signal_alert(signal_info, summary)
                             signal_detected = True
 
             # 2. 모멘텀 시그널 체크 (활성화된 경우)
-            if self.momentum_enabled:
-                stats = self.api.get_24h_stats(symbol)
+            if self.momentum_enabled and not df.empty:
+                momentum_signal = self.signal_detector.analyze_momentum_signal_rolling(
+                    symbol=symbol,
+                    df=df,
+                    timeframe=self.momentum_timeframe,
+                    min_volume_usd=self.momentum_min_volume,
+                    min_price_change_pct=self.momentum_min_price_change
+                )
 
-                if stats:
-                    momentum_signal = self.signal_detector.analyze_momentum_signal(
-                        symbol=symbol,
-                        stats=stats,
-                        min_volume_usd=self.momentum_min_volume,
-                        min_price_change_pct=self.momentum_min_price_change
-                    )
+                if momentum_signal:
+                    # 거래대금 순위 및 거래대금 추가
+                    volume_info = self.api.get_volume_rank(symbol)
+                    if volume_info:
+                        momentum_signal['volume_rank'] = volume_info['rank']
+                        momentum_signal['quote_volume'] = volume_info['quote_volume']
 
-                    if momentum_signal:
-                        # 모멘텀 시그널 발생!
-                        summary = self.signal_detector.get_signal_summary(momentum_signal)
-                        self.notifier.send_signal_alert(momentum_signal, summary)
-                        signal_detected = True
+                    # 모멘텀 시그널 발생!
+                    summary = self.signal_detector.get_signal_summary(momentum_signal)
+                    self.notifier.send_signal_alert(momentum_signal, summary)
+                    signal_detected = True
 
             return signal_detected
 

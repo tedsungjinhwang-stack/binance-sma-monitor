@@ -154,9 +154,12 @@ class Notifier:
         # 텔레그램 (HTML 포맷)
         if self.telegram_enabled:
             # 모멘텀 시그널
-            if signal_type == 'STRONG_MOMENTUM':
+            if signal_type.startswith('STRONG_MOMENTUM'):
                 price_change_pct = signal_info['price_change_percent']
+                timeframe = signal_info.get('timeframe', '24h')
                 timestamp = signal_info['timestamp']
+                volume_rank = signal_info.get('volume_rank')
+                quote_volume = signal_info.get('quote_volume')
 
                 # KST 변환
                 from datetime import timedelta
@@ -171,16 +174,23 @@ class Notifier:
 <b>⚡💥 강력한 모멘텀 감지 ⚡💥</b>
 
 <b>심볼:</b> {symbol}
-<b>24시간 상승률:</b> {price_change_pct:+.2f}%
-<b>시간:</b> {time_str}
-"""
+<b>{timeframe} 상승률:</b> {price_change_pct:+.2f}%"""
+
+                # 거래대금 순위 및 거래대금 추가
+                if volume_rank and quote_volume:
+                    volume_m = quote_volume / 1_000_000
+                    telegram_msg += f"\n<b>거래대금:</b> {volume_rank}위 (${volume_m:,.1f}M)"
+
+                telegram_msg += f"\n<b>시간:</b> {time_str}\n"
             # 역배열 시그널
             else:
                 price = signal_info['price']
                 reverse_type = signal_info.get('reverse_type', 'FULL')
                 target_sma = signal_info['target_sma']
-                target_sma_period = signal_info.get('target_sma_period', 1792)
+                target_sma_period = signal_info.get('target_sma_period', 480)
                 timestamp = signal_info['timestamp']
+                volume_rank = signal_info.get('volume_rank')
+                quote_volume = signal_info.get('quote_volume')
 
                 # KST 변환
                 from datetime import timedelta
@@ -191,8 +201,8 @@ class Notifier:
                     kst_time = timestamp + timedelta(hours=9)
                 time_str = kst_time.strftime('%Y-%m-%d %H:%M:%S KST')
 
-                # 시그널 메시지
-                msg_title = f"역배열 & SMA1792 근처 (±5%)"
+                # 시그널 메시지 (480, 1시간봉)
+                msg_title = f"역배열 & SMA480 근처 (±5%)"
                 emoji = "🚀🎯"
 
                 # 차이 계산
@@ -203,9 +213,15 @@ class Notifier:
 
 <b>심볼:</b> {symbol}
 <b>현재가:</b> {price:.4f}
-<b>SMA{target_sma_period}:</b> {target_sma:.4f} (차이: {diff_pct:+.2f}%)
-<b>시간:</b> {time_str}
-"""
+<b>SMA{target_sma_period}:</b> {target_sma:.4f} (차이: {diff_pct:+.2f}%)"""
+
+                # 거래대금 순위 및 거래대금 추가
+                if volume_rank and quote_volume:
+                    volume_m = quote_volume / 1_000_000
+                    telegram_msg += f"\n<b>거래대금:</b> {volume_rank}위 (${volume_m:,.1f}M)"
+
+                telegram_msg += f"\n<b>시간:</b> {time_str}\n"
+
             self.send_telegram(telegram_msg.strip())
 
         # 디스코드
@@ -214,10 +230,11 @@ class Notifier:
 
         # 이메일
         if self.email_enabled:
-            if signal_type == 'STRONG_MOMENTUM':
-                subject = f"[Binance Alert] {symbol} 강력한 모멘텀!"
+            if signal_type.startswith('STRONG_MOMENTUM'):
+                timeframe = signal_info.get('timeframe', '24h')
+                subject = f"[Binance Alert] {symbol} {timeframe} 강력한 모멘텀!"
             else:
-                subject = f"[Binance Alert] {symbol} SMA1792 근처!"
+                subject = f"[Binance Alert] {symbol} SMA480 근처!"
             self.send_email(subject, summary)
 
     def send_system_message(self, message: str, level: str = "INFO"):
@@ -238,13 +255,13 @@ class Notifier:
         if level == "ERROR" and self.telegram_enabled:
             self.send_telegram(f"⚠️ <b>시스템 에러</b>\n\n{message}")
 
-    def _format_sma_values_html(self, sma_values: Dict[int, float], target_sma_period: int = 1792) -> str:
+    def _format_sma_values_html(self, sma_values: Dict[int, float], target_sma_period: int = 480) -> str:
         """SMA 값들을 HTML 포맷으로 변환"""
         parts = []
-        # target_sma_period에 따라 표시할 SMA 결정
-        if target_sma_period == 1792:
-            display_periods = [1792, 896, 448, 224]
-        else:  # 480
+        # target_sma_period에 따라 표시할 SMA 결정 (1시간봉 기준)
+        if target_sma_period == 480:
+            display_periods = [480, 240, 120]
+        else:
             display_periods = [480, 240, 120]
 
         for period in display_periods:

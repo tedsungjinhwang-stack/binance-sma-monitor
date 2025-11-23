@@ -383,3 +383,57 @@ class BinanceAPI:
         except BinanceAPIException as e:
             logger.error(f"모멘텀 필터링 실패: {e}")
             return []
+
+    def get_volume_rank(self, symbol: str) -> Optional[Dict]:
+        """
+        특정 심볼의 거래대금 순위 및 거래대금 가져오기
+
+        Args:
+            symbol: 심볼
+
+        Returns:
+            {'rank': 순위, 'quote_volume': 거래대금(USD)} 또는 None
+        """
+        try:
+            # 거래소 정보 가져오기
+            exchange_info = self.client.futures_exchange_info()
+            perpetual_symbols = {
+                s['symbol']
+                for s in exchange_info['symbols']
+                if s['symbol'].endswith('USDT')
+                   and s['status'] == 'TRADING'
+                   and s['contractType'] == 'PERPETUAL'
+            }
+
+            # 24시간 티커 데이터 가져오기
+            tickers = self.client.futures_ticker()
+
+            # USDT PERPETUAL 선물만 필터링 및 거래대금으로 정렬
+            usdt_tickers = []
+            for ticker in tickers:
+                if ticker['symbol'] in perpetual_symbols:
+                    try:
+                        quote_volume = float(ticker.get('quoteVolume', 0))
+                        usdt_tickers.append({
+                            'symbol': ticker['symbol'],
+                            'quote_volume': quote_volume
+                        })
+                    except (ValueError, TypeError):
+                        continue
+
+            # 거래대금 기준 내림차순 정렬
+            usdt_tickers.sort(key=lambda x: x['quote_volume'], reverse=True)
+
+            # 해당 심볼의 순위 및 거래대금 찾기
+            for rank, ticker in enumerate(usdt_tickers, start=1):
+                if ticker['symbol'] == symbol:
+                    return {
+                        'rank': rank,
+                        'quote_volume': ticker['quote_volume']
+                    }
+
+            return None
+
+        except BinanceAPIException as e:
+            logger.error(f"{symbol} 거래대금 순위 조회 실패: {e}")
+            return None

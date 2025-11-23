@@ -1,0 +1,87 @@
+# Binance SMA Monitor Configuration
+
+# Binance API Settings
+BINANCE:
+  API_KEY: ""  # 읽기 전용 권한만 있으면 됨 (또는 비워두기)
+  API_SECRET: ""  # 읽기 전용 권한만 있으면 됨 (또는 비워두기)
+  TESTNET: false  # true면 테스트넷, false면 실제 메인넷
+
+# 모니터링 설정
+MONITOR:
+  INTERVAL: 3600  # 체크 주기 (초) - 1시간봉이므로 1시간(3600초)마다 체크
+  MARKET_TYPE: "USDT_PERP"  # USDT 선물 (Perpetual)
+  TIMEFRAME: "1h"  # 1시간봉
+
+  # 모니터링할 코인 설정
+  COIN_FILTER:
+    MODE: "FILTERED"  # ALL, TOP_VOLUME, FILTERED, SPECIFIC
+    # FILTERED 모드 설정 (거래량만 최소한으로 필터, 상승률 제거)
+    MIN_VOLUME_USD: 1000000  # 최소 거래량 1M USD (API 레이트 리밋 방지)
+    MIN_PRICE_CHANGE_PCT: -100  # 상승률 필터 제거 (하락장도 포함)
+    # 레거시 옵션
+    TOP_N: 50  # TOP_VOLUME 모드일 때 상위 N개 코인
+    SPECIFIC_COINS:  # SPECIFIC 모드일 때 모니터링할 코인 목록
+      - "BTCUSDT"
+      - "ETHUSDT"
+      - "BNBUSDT"
+
+# SMA 설정
+SMA:
+  PERIODS: [120, 240, 480]  # 1시간봉 기준 SMA 기간
+  # 참고: 1시간봉 기준
+  # - 120 = 120시간 (약 5일)
+  # - 240 = 240시간 (약 10일)
+  # - 480 = 480시간 (약 20일)
+
+# 시그널 조건
+SIGNAL:
+  # 역배열 조건 (긴 기간 SMA가 짧은 기간 SMA보다 위에 있어야 함)
+  REVERSE_ALIGNMENT: true  # SMA480 > SMA240 > SMA120 (1시간봉 기준)
+
+  # 돌파 조건
+  BREAKOUT:
+    TYPE: "CLOSE"  # CLOSE (종가 기준), BODY (캔들 전체), REALTIME (실시간)
+    TARGET_SMA: 480  # 돌파 기준 SMA (1시간봉 480선)
+    CONFIRM_CANDLES: 1  # 돌파 확인할 캔들 수 (1 = 즉시, 2 = 1개 캔들 더 확인)
+
+  # 모멘텀 조건 (강력한 상승 모멘텀)
+  MOMENTUM:
+    ENABLED: true  # 모멘텀 시그널 활성화
+    TIMEFRAME: "4h"  # 시간 기준 (4h, 6h, 12h, 24h)
+    MIN_VOLUME_USD: 30000000  # 최소 거래량 30M USD (4시간 기준)
+    MIN_PRICE_CHANGE_PCT: 10.0  # 최소 상승률 10% (4시간 기준)
+
+  # 중복 알림 방지
+  COOLDOWN: 21600  # 같은 코인에 대해 재알림까지 대기 시간 (초) - 6시간
+
+# 알림 설정
+NOTIFICATION:
+  # 알림 방법 (여러 개 동시 사용 가능)
+  METHODS:
+    CONSOLE: true  # 콘솔 출력
+    TELEGRAM: true  # 텔레그램 알림
+    DISCORD: false  # 디스코드 웹훅
+    EMAIL: false  # 이메일 알림
+
+  # 텔레그램 설정
+  TELEGRAM:
+    BOT_TOKEN: "YOUR_BOT_TOKEN_HERE"  # 텔레그램 봇 토큰 (@BotFather에서 발급)
+    CHAT_ID: "YOUR_CHAT_ID_HERE"  # 알림 받을 채팅 ID
+
+  # 디스코드 웹훅 설정
+  DISCORD:
+    WEBHOOK_URL: ""  # 디스코드 웹훅 URL
+
+  # 이메일 설정
+  EMAIL:
+    SMTP_SERVER: "smtp.gmail.com"
+    SMTP_PORT: 587
+    SENDER_EMAIL: ""
+    SENDER_PASSWORD: ""  # 앱 비밀번호 사용 권장
+    RECEIVER_EMAIL: ""
+
+# 로깅 설정
+LOGGING:
+  LEVEL: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  FILE: "logs/monitor.log"
+  CONSOLE: true
