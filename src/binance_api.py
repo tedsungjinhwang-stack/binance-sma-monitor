@@ -32,7 +32,7 @@ class BinanceAPI:
             # 거래대금 순위 캐시
             self._volume_rank_cache: Optional[Dict[str, Dict]] = None
             self._volume_rank_cache_time: Optional[datetime] = None
-            self._volume_rank_cache_ttl = 300  # 5분 캐시
+            self._volume_rank_cache_ttl = 3600  # 1시간 캐시
 
         except Exception as e:
             logger.error(f"바이낸스 API 연결 실패: {e}")
