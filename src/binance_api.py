@@ -8,6 +8,7 @@ from binance.client import Client
 from binance.exceptions import BinanceAPIException
 import pandas as pd
 import logging
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,12 @@ class BinanceAPI:
         try:
             self.client = Client(api_key, api_secret, testnet=testnet)
             logger.info(f"바이낸스 API 연결 완료 (Testnet: {testnet})")
+
+            # 거래대금 순위 캐시
+            self._volume_rank_cache: Optional[Dict[str, Dict]] = None
+            self._volume_rank_cache_time: Optional[datetime] = None
+            self._volume_rank_cache_ttl = 300  # 5분 캐시
+
         except Exception as e:
             logger.error(f"바이낸스 API 연결 실패: {e}")
             raise
@@ -384,15 +391,9 @@ class BinanceAPI:
             logger.error(f"모멘텀 필터링 실패: {e}")
             return []
 
-    def get_volume_rank(self, symbol: str) -> Optional[Dict]:
+    def _update_volume_rank_cache(self):
         """
-        특정 심볼의 거래대금 순위 및 거래대금 가져오기
-
-        Args:
-            symbol: 심볼
-
-        Returns:
-            {'rank': 순위, 'quote_volume': 거래대금(USD)} 또는 None
+        거래대금 순위 캐시 업데이트
         """
         try:
             # 거래소 정보 가져오기
@@ -424,16 +425,45 @@ class BinanceAPI:
             # 거래대금 기준 내림차순 정렬
             usdt_tickers.sort(key=lambda x: x['quote_volume'], reverse=True)
 
-            # 해당 심볼의 순위 및 거래대금 찾기
+            # 캐시 생성: {심볼: {rank, quote_volume}}
+            cache = {}
             for rank, ticker in enumerate(usdt_tickers, start=1):
-                if ticker['symbol'] == symbol:
-                    return {
-                        'rank': rank,
-                        'quote_volume': ticker['quote_volume']
-                    }
+                cache[ticker['symbol']] = {
+                    'rank': rank,
+                    'quote_volume': ticker['quote_volume']
+                }
+
+            self._volume_rank_cache = cache
+            self._volume_rank_cache_time = datetime.now()
+            logger.info(f"거래대금 순위 캐시 업데이트 완료 ({len(cache)}개 심볼)")
+
+        except BinanceAPIException as e:
+            logger.error(f"거래대금 순위 캐시 업데이트 실패: {e}")
+
+    def get_volume_rank(self, symbol: str) -> Optional[Dict]:
+        """
+        특정 심볼의 거래대금 순위 및 거래대금 가져오기 (캐싱 사용)
+
+        Args:
+            symbol: 심볼
+
+        Returns:
+            {'rank': 순위, 'quote_volume': 거래대금(USD)} 또는 None
+        """
+        try:
+            # 캐시가 없거나 만료된 경우 업데이트
+            now = datetime.now()
+            if (self._volume_rank_cache is None or
+                self._volume_rank_cache_time is None or
+                (now - self._volume_rank_cache_time).total_seconds() > self._volume_rank_cache_ttl):
+                self._update_volume_rank_cache()
+
+            # 캐시에서 조회
+            if self._volume_rank_cache and symbol in self._volume_rank_cache:
+                return self._volume_rank_cache[symbol]
 
             return None
 
-        except BinanceAPIException as e:
+        except Exception as e:
             logger.error(f"{symbol} 거래대금 순위 조회 실패: {e}")
             return None
